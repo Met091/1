@@ -9,7 +9,7 @@ from pathlib import Path
 # --- Project-specific Imports ---
 from config.settings import (
     ACE_DEFAULT_THEME, ACE_DEFAULT_KEYBINDING, ACE_FONT_SIZE, ACE_TAB_SIZE, ACE_WRAP_LINES,
-    GEMINI_MODEL_NAME, GEMINI_SYSTEM_PROMPT_TEMPLATE, WORKSPACE_DIR
+    GEMINI_MODEL_NAME, GEMINI_SYSTEM_PROMPT_TEMPLATE, WORKSPACE_DIR, GOOGLE_API_KEY # <-- CORRECTED: Added GOOGLE_API_KEY
 )
 from utils.session_manager import initialize_session_state
 from utils.file_utils import (
@@ -150,7 +150,7 @@ with st.sidebar:
     st.subheader("Status & Info")
     st.caption(f"Using AI model: `{GEMINI_MODEL_NAME}`")
     st.caption(f"Workspace: `{WORKSPACE_DIR.resolve()}`")
-    if GOOGLE_API_KEY:
+    if GOOGLE_API_KEY: # This line should now work as GOOGLE_API_KEY is imported
         st.success("Google API Key loaded.", icon="✅")
     else:
         st.error("Google API Key not found. AI features will not work.", icon="❗")
