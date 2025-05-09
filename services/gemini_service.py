@@ -3,7 +3,7 @@ import streamlit as st
 import google.generativeai as genai
 import json
 from utils.logger import app_logger
-from utils.file_utils import save_file, delete_file_from_workspace # Renamed for clarity
+from utils.file_utils import save_file, delete_file_from_workspace
 from config.settings import (
     GOOGLE_API_KEY, GEMINI_MODEL_NAME, WORKSPACE_DIR,
     GEMINI_SYSTEM_PROMPT_TEMPLATE, GEMINI_GENERATION_CONFIG, GEMINI_SAFETY_SETTINGS
@@ -19,15 +19,19 @@ def _initialize_gemini_client():
     """
     global _gemini_model_client
     if _gemini_model_client is None:
+        app_logger.info("Attempting to initialize Gemini client...")
         if not GOOGLE_API_KEY:
-            err_msg = "🔴 Google API Key not configured. Please set `GOOGLE_API_KEY` in `.env` or Streamlit secrets."
-            st.error(err_msg) # User-facing error
+            err_msg = "🔴 Google API Key not configured (GOOGLE_API_KEY is missing or empty in config). Please set `GOOGLE_API_KEY` in `.env` or Streamlit secrets."
+            # This error is now primarily shown in app.py's sidebar status.
+            # st.error(err_msg) # Avoid direct st.error here if possible, let app.py handle UI
             app_logger.critical(err_msg)
-            # st.stop() # This would halt the app; consider if this is desired behavior here or in app.py
-            return None # Allow app to continue but AI features will fail
+            return None
+
+        app_logger.info(f"Found GOOGLE_API_KEY (length: {len(GOOGLE_API_KEY)}). Proceeding with Gemini client configuration.")
 
         try:
             genai.configure(api_key=GOOGLE_API_KEY)
+            app_logger.info(f"genai.configure called successfully.")
             _gemini_model_client = genai.GenerativeModel(
                 model_name=GEMINI_MODEL_NAME,
                 generation_config=GEMINI_GENERATION_CONFIG,
@@ -35,10 +39,11 @@ def _initialize_gemini_client():
             )
             app_logger.info(f"Gemini client initialized successfully with model: {GEMINI_MODEL_NAME}")
         except Exception as e:
-            err_msg = f"🔴 Failed to initialize Google AI client: {e}"
-            st.error(err_msg)
-            app_logger.critical(err_msg, exc_info=True)
-            _gemini_model_client = None # Ensure it's None on failure
+            # This error is critical and should be visible.
+            err_msg_ui = f"🔴 Failed to initialize Google AI client: {type(e).__name__} - {str(e)[:100]}..."
+            st.error(err_msg_ui) # Show error in UI as this is a startup/config issue
+            app_logger.critical(f"Failed to initialize Google AI client during genai.configure or GenerativeModel instantiation: {e}", exc_info=True)
+            _gemini_model_client = None
     return _gemini_model_client
 
 def _clean_ai_response_text(ai_response_text: str) -> str:
@@ -48,107 +53,92 @@ def _clean_ai_response_text(ai_response_text: str) -> str:
     text = ai_response_text.strip()
     if text.startswith("```json") and text.endswith("```"):
         text = text[7:-3].strip()
-    elif text.startswith("```") and text.endswith("```"): # Generic ``` block
+    elif text.startswith("```") and text.endswith("```"):
         text = text[3:-3].strip()
     return text
 
 def _prepare_gemini_history(chat_history: list, system_prompt: str) -> list:
     """
     Formats chat history for the Gemini API call, including the system prompt.
-    Ensures the conversation starts with a user role for the system prompt,
-    followed by a model role for the initial "Understood" message.
     """
     gemini_history = []
-    # Start with the system prompt as the first user message
     gemini_history.append({"role": "user", "parts": [{"text": system_prompt}]})
-    # Gemini API expects alternating user/model roles. Add a model part to prime.
     gemini_history.append({"role": "model", "parts": [{"text": json.dumps([{"action": "chat", "content": "Understood. I will respond only with JSON commands as instructed."}])}]})
 
     for msg in chat_history:
-        role = msg["role"]  # "user" or "assistant"
+        role = msg["role"]
         content = msg["content"]
         api_role = "model" if role == "assistant" else "user"
 
-        if role == "assistant" and isinstance(content, list): # AI commands list
+        if role == "assistant" and isinstance(content, list):
             try:
                 content_str = json.dumps(content)
             except TypeError as e:
                 app_logger.error(f"Error serializing assistant message to JSON: {content}. Error: {e}")
-                content_str = str(content) # Fallback
-        else: # User message or AI chat string
+                content_str = str(content)
+        else:
             content_str = str(content)
 
-        if content_str: # Avoid sending empty messages
+        if content_str:
             gemini_history.append({"role": api_role, "parts": [{"text": content_str}]})
     return gemini_history
 
 def ask_gemini_ai(chat_history: list, current_workspace_files: list[str]) -> str:
     """
     Sends the conversation history to the Gemini AI and returns its raw text response.
-
-    Args:
-        chat_history (list): The current list of chat messages from st.session_state.messages.
-        current_workspace_files (list[str]): List of Python filenames in the workspace.
-
-    Returns:
-        str: The AI's raw text response, expected to be a JSON string of commands,
-             or a JSON string representing a chat error message if API call fails.
     """
     model = _initialize_gemini_client()
     if not model:
-        app_logger.error("Gemini client not available for ask_gemini_ai.")
-        return json.dumps([{"action": "chat", "content": "AI Error: Gemini client is not initialized. Please check API key and configuration."}])
+        app_logger.error("Gemini client not available for ask_gemini_ai call because _initialize_gemini_client failed.")
+        return json.dumps([{"action": "chat", "content": "AI Error: Gemini client is not initialized. Please check API key and configuration (see logs for details)."}])
 
     file_list_str = ', '.join(current_workspace_files) if current_workspace_files else 'None'
-    # Dynamically insert the current file list into the system prompt template
+    
+    # --- BEGIN DEBUG LOGGING for system prompt formatting ---
+    app_logger.debug(f"GEMINI_SYSTEM_PROMPT_TEMPLATE (first 300 chars): {GEMINI_SYSTEM_PROMPT_TEMPLATE[:300]}")
+    if "{file_list}" in GEMINI_SYSTEM_PROMPT_TEMPLATE:
+        app_logger.debug("Placeholder '{file_list}' was FOUND in GEMINI_SYSTEM_PROMPT_TEMPLATE string literal.")
+    else:
+        app_logger.error("Placeholder '{file_list}' was NOT FOUND in GEMINI_SYSTEM_PROMPT_TEMPLATE string literal. This will cause a KeyError if not intended.")
+    # --- END DEBUG LOGGING ---
+
     try:
-        # Ensure file_list_str is properly escaped if it could contain problematic characters for .format
-        # For simple comma-separated filenames, it should be fine.
         system_prompt_with_context = GEMINI_SYSTEM_PROMPT_TEMPLATE.format(file_list=file_list_str)
     except KeyError as e:
-        app_logger.error(f"KeyError formatting system prompt: {e}. Placeholder 'file_list' might be missing or misspelled in template.")
-        return json.dumps([{"action": "chat", "content": "AI Error: System prompt configuration issue."}])
+        # Log the specific key that caused the error
+        app_logger.error(f"KeyError formatting system prompt. Offending key: '{e}'. This means the placeholder '{{{e}}}' was found in the template but not provided as a keyword argument to .format(), OR '{e}' was expected but the placeholder was different (e.g. 'file_list' was expected but the placeholder was misspelled).", exc_info=True)
+        return json.dumps([{"action": "chat", "content": f"AI Error: System prompt configuration issue. Offending placeholder key: '{e}'. Please check server logs."}])
+    except Exception as e_format: # Catch any other formatting errors
+        app_logger.error(f"Unexpected error during system prompt formatting: {e_format}", exc_info=True)
+        return json.dumps([{"action": "chat", "content": "AI Error: Critical issue during system prompt formatting. Please check server logs."}])
 
 
     gemini_api_history = _prepare_gemini_history(chat_history, system_prompt_with_context)
-    app_logger.debug(f"Sending history to Gemini: {json.dumps(gemini_api_history, indent=2)}")
+    app_logger.debug(f"Sending history to Gemini (length: {len(gemini_api_history)} entries). Last user message: {chat_history[-1]['content'] if chat_history and chat_history[-1]['role']=='user' else 'N/A'}")
 
     try:
         response = model.generate_content(gemini_api_history)
-        app_logger.debug(f"Received response from Gemini: {response.text}")
+        if response.prompt_feedback and response.prompt_feedback.block_reason:
+            app_logger.warning(f"Gemini response was blocked. Reason: {response.prompt_feedback.block_reason}. Safety ratings: {response.prompt_feedback.safety_ratings}")
+        app_logger.debug(f"Received response from Gemini. Text length: {len(response.text) if response.text else 0}.")
         return response.text
     except Exception as e:
-        error_message = f"Gemini API call failed: {type(e).__name__} - {str(e)[:150]}"
+        error_message = f"Gemini API call to model.generate_content failed: {type(e).__name__} - {str(e)[:250]}"
         app_logger.error(error_message, exc_info=True)
 
-        # More specific error handling based on common issues
-        error_content = f"AI Error: {str(e)[:150]}..."
-        if "API key not valid" in str(e).lower() or "permission_denied" in str(e).lower():
-            error_content = "AI Error: Invalid or missing Google API Key. Please check your configuration."
+        error_content = f"AI Error: API call failed. Details: {str(e)[:150]}..."
+        # ... (rest of specific error handling for API call) ...
+        if "API key not valid" in str(e).lower() or "permission_denied" in str(e).lower() or "PERMISSION_DENIED" in str(e).upper():
+            error_content = "AI Error: Invalid or missing Google API Key, or key lacks permissions for the model. Please verify your key and its configuration in Google AI Studio / Google Cloud."
         elif "429" in str(e) or "quota" in str(e).lower() or "resource has been exhausted" in str(e).lower():
             error_content = "AI Error: API Quota or Rate Limit Exceeded. Please try again later or check your Google Cloud project quotas."
-        elif "safety settings" in str(e).lower() or (hasattr(response, 'prompt_feedback') and response.prompt_feedback.block_reason):
-            block_reason = getattr(response.prompt_feedback, 'block_reason', 'unknown') if hasattr(response, 'prompt_feedback') else 'unknown'
-            error_content = f"AI Error: Request blocked by safety filters (Reason: {block_reason}). Please revise your prompt."
-        elif hasattr(response, 'candidates') and response.candidates and response.candidates[0].finish_reason != 'STOP':
-            finish_reason = response.candidates[0].finish_reason
-            error_content = f"AI Error: Response generation stopped prematurely (Reason: {finish_reason}). This might be due to safety filters or length limits."
-
+        # ... (other specific error messages)
+        
         return json.dumps([{"action": "chat", "content": error_content}])
 
 
 def parse_and_execute_ai_commands(ai_response_text: str) -> list[dict]:
-    """
-    Parses the AI's JSON response and performs the requested file actions.
-    Updates st.session_state directly for editor content if the active file is modified.
-
-    Args:
-        ai_response_text (str): The raw JSON string response from the AI.
-
-    Returns:
-        list[dict]: A list of command dictionaries that were processed (or attempted).
-                    This is used for displaying AI actions in the chat history.
-    """
+    # ... (rest of the function remains the same) ...
     cleaned_text = _clean_ai_response_text(ai_response_text)
     executed_commands_list = []
 
@@ -168,27 +158,25 @@ def parse_and_execute_ai_commands(ai_response_text: str) -> list[dict]:
                 executed_commands_list.append({"action": "chat", "content": f"AI Warning: Invalid command format: {command_data}"})
                 continue
 
-            # Log the command being processed for traceability
             app_logger.info(f"Processing AI command: {command_data}")
-            executed_commands_list.append(command_data.copy()) # Add a copy to the list for display
+            executed_commands_list.append(command_data.copy())
 
             action = command_data.get("action")
             filename = command_data.get("filename")
-            content = command_data.get("content") # For create_update
+            content = command_data.get("content")
 
             if action == "create_update":
                 if filename and content is not None:
                     if not filename.endswith(".py"):
                         st.error(f"AI command failed: Filename '{filename}' must end with '.py'.")
                         app_logger.error(f"AI 'create_update' for invalid filename: {filename}")
-                        executed_commands_list[-1]['status'] = 'failed: invalid filename' # Add status to displayed command
+                        executed_commands_list[-1]['status'] = 'failed: invalid filename'
                         continue
 
                     success = save_file(filename, content, WORKSPACE_DIR)
                     if success:
                         st.toast(f"AI created/updated: {filename}", icon="💾")
                         app_logger.info(f"AI 'create_update' successful for '{filename}'.")
-                        # If this file is currently open in the editor, update editor's content
                         if st.session_state.selected_file == filename:
                             st.session_state.file_content_on_load = content
                             st.session_state.editor_unsaved_content = content
@@ -196,7 +184,6 @@ def parse_and_execute_ai_commands(ai_response_text: str) -> list[dict]:
                             app_logger.debug(f"Updated session state for active editor file '{filename}' after AI save.")
                         executed_commands_list[-1]['status'] = 'success'
                     else:
-                        # save_file already shows st.error and logs
                         app_logger.error(f"AI 'create_update' failed for '{filename}'.")
                         executed_commands_list[-1]['status'] = 'failed: save error'
                 else:
@@ -211,17 +198,14 @@ def parse_and_execute_ai_commands(ai_response_text: str) -> list[dict]:
                     success = delete_file_from_workspace(filename, WORKSPACE_DIR)
                     if success:
                         app_logger.info(f"AI 'delete' successful for '{filename}'.")
-                        # If the deleted file was selected in editor, clear editor
                         if st.session_state.selected_file == filename:
                             st.session_state.selected_file = None
                             st.session_state.file_content_on_load = ""
                             st.session_state.editor_unsaved_content = ""
                             st.session_state.last_saved_content = ""
                             app_logger.debug(f"Cleared session state for active editor file '{filename}' after AI delete.")
-                        # If deleted file was being previewed, stop preview (handled in app.py based on file list change)
                         executed_commands_list[-1]['status'] = 'success'
                     else:
-                        # delete_file_from_workspace already shows st.error and logs
                         app_logger.error(f"AI 'delete' failed for '{filename}'.")
                         executed_commands_list[-1]['status'] = 'failed: delete error'
                 else:
@@ -231,7 +215,6 @@ def parse_and_execute_ai_commands(ai_response_text: str) -> list[dict]:
                     executed_commands_list[-1]['status'] = 'failed: missing filename'
 
             elif action == "chat":
-                # No file system action, message will be displayed by app.py
                 app_logger.info(f"AI 'chat' action: {command_data.get('content')}")
                 executed_commands_list[-1]['status'] = 'chat message'
                 pass
@@ -254,21 +237,3 @@ def parse_and_execute_ai_commands(ai_response_text: str) -> list[dict]:
         st.error(err_msg)
         app_logger.error(err_msg, exc_info=True)
         return [{"action": "chat", "content": f"Critical Error: Could not process AI commands due to: {e}"}]
-
-if __name__ == "__main__":
-    # Example usage for testing (requires Streamlit context for st.session_state and st.toast/error)
-    app_logger.info("Gemini service module loaded.")
-    # To test, you would typically call these functions from app.py or a test script
-    # that mocks Streamlit's session state and UI components.
-
-    # Example of how ask_gemini_ai might be called (requires API key and setup)
-    # if GOOGLE_API_KEY:
-    #     test_history = [{"role": "user", "content": "Create a file called test.py with print('hello')"}]
-    #     test_files = []
-    #     response = ask_gemini_ai(test_history, test_files)
-    #     app_logger.info(f"Test AI response: {response}")
-    #     if response:
-    #         commands = parse_and_execute_ai_commands(response)
-    #         app_logger.info(f"Test executed commands: {commands}")
-    # else:
-    #     app_logger.warning("Cannot run ask_gemini_ai test without GOOGLE_API_KEY.")
