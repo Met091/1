@@ -3,30 +3,30 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 from utils.logger import app_logger
+from google.generativeai.types import HarmCategory, HarmBlockThreshold # Import enums
 
 # --- Environment Variables ---
-# Load environment variables from .env file in the project root
-# The .env file should be in the same directory as app.py or the project root.
-# For Streamlit Cloud, secrets are set in the dashboard.
-dotenv_path = Path('.') / '.env' # Assumes .env is in the root of the project
+dotenv_path = Path('.') / '.env'
 if dotenv_path.exists():
     load_dotenv(dotenv_path=dotenv_path)
-    app_logger.info(f".env file loaded from {dotenv_path.resolve()}")
+    app_logger.info(f".env file found and loaded from {dotenv_path.resolve()}")
 else:
-    app_logger.info(".env file not found, relying on Streamlit secrets or environment variables.")
+    app_logger.warning(f".env file NOT FOUND at {dotenv_path.resolve()}. Relying on environment variables or Streamlit secrets.")
 
 # --- API Keys ---
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-if not GOOGLE_API_KEY:
-    app_logger.warning("GOOGLE_API_KEY not found in environment variables or .env file.")
-    # In a Streamlit app, st.error() would be used in app.py if this is critical at startup.
+
+if GOOGLE_API_KEY and len(GOOGLE_API_KEY) > 10:
+    app_logger.info(f"GOOGLE_API_KEY loaded from environment. Length: {len(GOOGLE_API_KEY)}. Starts with: {GOOGLE_API_KEY[:4]}...")
+elif GOOGLE_API_KEY:
+     app_logger.warning(f"GOOGLE_API_KEY loaded, but it's very short. Length: {len(GOOGLE_API_KEY)}. This might be an issue.")
+else:
+    app_logger.error("GOOGLE_API_KEY is NOT FOUND in environment variables or .env file. AI features will fail.")
+
 
 # --- Workspace Configuration ---
-# Defines the directory where AI-generated Streamlit app files will be saved.
-# Path is relative to the project root (where app.py is located).
 WORKSPACE_DIR_NAME = "workspace_st_apps"
 WORKSPACE_DIR = Path(WORKSPACE_DIR_NAME)
-# Ensure the directory exists when the settings module is loaded.
 try:
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
     app_logger.info(f"Workspace directory '{WORKSPACE_DIR.resolve()}' ensured.")
@@ -42,37 +42,28 @@ ACE_TAB_SIZE = 4
 ACE_WRAP_LINES = True
 
 # --- AI Model Configuration ---
-# Specifies which Google AI model to use for generating code.
-# Ensure this model is available and supports the required features.
-# GEMINI_MODEL_NAME = "gemini-1.5-flash-latest" # A faster, more cost-effective option
-GEMINI_MODEL_NAME = "gemini-1.5-pro-latest" # A more capable model
+GEMINI_MODEL_NAME = "gemini-1.5-pro-latest"
 
 # --- Gemini API Generation Configuration ---
-# These settings control aspects of the AI's response generation.
-# Adjust as needed for desired output behavior.
-# Refer to Google AI documentation for details on these parameters.
 GEMINI_GENERATION_CONFIG = {
-    "temperature": 0.4,       # Controls randomness. Lower is more deterministic.
-    "top_p": 1.0,             # Nucleus sampling.
-    "top_k": 32,              # Limits the sampling pool.
-    "max_output_tokens": 8192,# Maximum number of tokens in the response.
+    "temperature": 0.4,
+    "top_p": 1.0,
+    "top_k": 32,
+    "max_output_tokens": 8192,
 }
 
-# --- Gemini API Safety Settings ---
-# Configure content safety thresholds.
-# Options: BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE, BLOCK_LOW_AND_ABOVE
-# It's crucial to understand the implications of these settings.
+# --- Gemini API Safety Settings (Using Enums for robustness) ---
 GEMINI_SAFETY_SETTINGS = {
-    "HARASSMENT": "BLOCK_MEDIUM_AND_ABOVE",
-    "HATE_SPEECH": "BLOCK_MEDIUM_AND_ABOVE",
-    "SEXUALLY_EXPLICIT": "BLOCK_MEDIUM_AND_ABOVE",
-    "DANGEROUS_CONTENT": "BLOCK_MEDIUM_AND_ABOVE",
+    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
 }
+# Log the safety settings being used
+app_logger.info(f"Gemini Safety Settings configured: { {category.name: threshold.name for category, threshold in GEMINI_SAFETY_SETTINGS.items()} }")
 
 
 # --- System Prompt for Gemini AI ---
-# This template instructs the AI on its role, available commands, and response format.
-# The `{file_list}` placeholder will be dynamically filled with the current files in the workspace.
 GEMINI_SYSTEM_PROMPT_TEMPLATE = f"""
 You are an AI assistant specialized in creating and managing Python files for Streamlit applications.
 Your primary goal is to accurately interpret user requests and translate them into file operations within a designated workspace.
@@ -120,13 +111,9 @@ Important Rules:
 """
 
 # --- Preview Server Configuration ---
-PREVIEW_SERVER_STARTUP_TIMEOUT = 5  # Seconds to wait for preview server to start
-PREVIEW_PROCESS_TERMINATE_TIMEOUT = 3 # Seconds to wait for graceful termination
-PREVIEW_PROCESS_KILL_TIMEOUT = 2      # Seconds to wait after kill signal
+PREVIEW_SERVER_STARTUP_TIMEOUT = 5
+PREVIEW_PROCESS_TERMINATE_TIMEOUT = 3
+PREVIEW_PROCESS_KILL_TIMEOUT = 2
 
-app_logger.info("Configuration settings loaded.")
+app_logger.info("Configuration settings module processed.")
 
-if __name__ == "__main__":
-    app_logger.info(f"GOOGLE_API_KEY is set: {bool(GOOGLE_API_KEY)}")
-    app_logger.info(f"Workspace directory: {WORKSPACE_DIR.resolve()}")
-    app_logger.info(f"Gemini Model: {GEMINI_MODEL_NAME}")
