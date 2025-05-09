@@ -1,0 +1,49 @@
+# .streamlit/config.toml
+
+[theme]
+# Primary accent color for interactive elements.
+primaryColor = "#7F56D9"  # A nice purple, adjust as needed
+
+# Background color for the main content area.
+backgroundColor = "#FFFFFF"  # Light mode default
+
+# Background color for sidebar and most interactive widgets.
+secondaryBackgroundColor = "#F8F9FA" # A very light grey for light mode
+
+# Text color for the main content area.
+textColor = "#1A202C"  # Dark grey/black for light mode
+
+# Font family for all text in the app, except code blocks.
+# Can be "serif", "sans serif", or "monospace".
+# Ensure "Inter" is loaded via CSS if you use it here.
+font = "sans serif"
+
+[logger]
+# Level of logging: 'error', 'warning', 'info', or 'debug'.
+level = "info"
+
+[server]
+# Controls whether the server development UI should be accessible.
+# Default is true, but for production or cleaner interface, can be false.
+# However, Streamlit Cloud might override or manage this.
+# For this app's preview functionality, headless is important.
+headless = true
+# Automatically rerun script when a file is saved.
+# Set to false because we manage previews explicitly.
+runOnSave = false
+# File watcher type: "auto", "poll", "watchdog", or "none".
+# "none" is good for this app to prevent interference with previews.
+fileWatcherType = "none"
+
+[client]
+# Whether to show a toolbar with options like "Rerun", "Settings", etc.
+toolbarMode = "minimal" # "developer", "viewer", "minimal", or "auto"
+
+# To define a dark theme, you would typically create a separate config or manage via CSS.
+# Streamlit's config.toml primarily sets one theme.
+# If you want to default to a dark theme, you would change the values above:
+# For example, for a dark theme:
+# primaryColor = "#9063F0"
+# backgroundColor = "#1A202C" # Dark background
+# secondaryBackgroundColor = "#2D3748" # Slightly lighter dark
+# textColor = "#E2E8F0" # Light text
