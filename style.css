@@ -1,0 +1,143 @@
+/* style.css */
+/* Import Google Font - Inter */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* --- Base Styles --- */
+body {
+    font-family: 'Inter', sans-serif;
+    color: var(--text-color); /* Uses Streamlit theme variables */
+    background-color: var(--background-color); /* Uses Streamlit theme variables */
+}
+
+/* --- Streamlit Specific Overrides --- */
+/* Main content area */
+.main .block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+}
+
+/* Sidebar styling */
+.stSidebar {
+    background-color: var(--secondary-background-color); /* Consistent with theme */
+}
+
+/* Button styling */
+.stButton>button {
+    border-radius: 0.5rem; /* 8px */
+    padding: 0.625rem 0.9375rem; /* 10px 15px */
+    font-weight: 500;
+    transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+    border: 1px solid var(--primary-color); /* Use theme's primary color for border */
+}
+
+.stButton>button:hover {
+    opacity: 0.85;
+}
+
+/* Primary button styling */
+.stButton>button[kind="primary"] {
+    background-color: var(--primary-color);
+    color: white; /* Ensure contrast */
+}
+.stButton>button[kind="primary"]:hover {
+    background-color: var(--primary-color); /* Keep color, adjust opacity or brightness if needed */
+    opacity: 0.9;
+}
+
+
+/* Chat input styling */
+.stChatInput textarea {
+    border-radius: 0.5rem;
+    border: 1px solid #cbd5e0; /* Neutral border */
+    background-color: var(--secondary-background-color);
+    color: var(--text-color);
+}
+.stChatInput button { /* Send button */
+    border-radius: 0.5rem;
+}
+
+/* Chat message styling */
+.stChatMessage {
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Expander styling */
+.stExpander {
+    border-radius: 0.5rem;
+    border: 1px solid var(--secondary-background-color);
+}
+.stExpander header {
+    font-weight: 500;
+}
+
+/* Tabs (streamlit-option-menu) */
+/* You might need to inspect the generated HTML to target these accurately if default classes are hard to override */
+/* This is a general approach; specific classes from streamlit-option-menu might be needed */
+div[data-testid="stHorizontalBlock"] > div[role="tablist"] > button {
+    border-radius: 0.375rem !important; /* 6px */
+    margin-right: 0.25rem !important;
+    padding: 0.5rem 1rem !important;
+    font-weight: 500;
+}
+div[data-testid="stHorizontalBlock"] > div[role="tablist"] > button[aria-selected="true"] {
+    background-color: var(--primary-color) !important;
+    color: white !important; /* Ensure text is visible on primary color */
+}
+
+/* ACE Editor - Streamlit Ace uses its own theming, but you can style the container */
+div[data-testid="stAceEditor"] {
+    border-radius: 0.5rem;
+    border: 1px solid #D1D5DB; /* A light grey border */
+    overflow: hidden; /* Ensures border radius is respected by internal elements */
+}
+
+
+/* Antd Components (sac.buttons) */
+/* Save/Delete buttons in editor */
+.ant-btn-group .ant-btn {
+    font-family: 'Inter', sans-serif;
+    border-radius: 0.375rem !important; /* Tailwind's rounded-md */
+}
+.ant-btn-primary {
+    background-color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: white !important;
+}
+.ant-btn-primary:hover, .ant-btn-primary:focus {
+    background-color: var(--primary-color) !important; /* Adjust opacity or make slightly darker if needed */
+    border-color: var(--primary-color) !important;
+    opacity: 0.9;
+}
+.ant-btn-dangerous { /* For delete button */
+    color: #dc3545 !important;
+    border-color: #dc3545 !important;
+}
+.ant-btn-dangerous:hover, .ant-btn-dangerous:focus {
+    color: white !important;
+    background-color: #dc3545 !important;
+    border-color: #dc3545 !important;
+    opacity: 0.9;
+}
+
+/* --- Utility Classes (Optional) --- */
+.shadow-md {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.rounded-lg {
+    border-radius: 0.5rem; /* 8px */
+}
+
+/* --- Responsive Adjustments --- */
+@media (max-width: 768px) {
+    .main .block-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    /* Adjust font sizes or spacing for smaller screens if needed */
+}
+
