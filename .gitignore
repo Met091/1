@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+venv/
+.env
+*.log
+*.log.*
+logs/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.hypothesis/
+.pytest_cache/
+pytestdebug.log
+instance/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Workspace (optional, if you don't want to commit generated apps by default)
+# workspace_st_apps/*
+# !workspace_st_apps/.gitkeep
+
+# IDE specific
+.vscode/
+.idea/
+*.DS_Store
